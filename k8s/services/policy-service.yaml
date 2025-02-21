@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: policy-service
+  namespace: insurance-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: policy-service
+  template:
+    metadata:
+      labels:
+        app: policy-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3001"
+    spec:
+      containers:
+      - name: policy-service
+        image: yourregistry.azurecr.io/policy-service:latest
+        ports:
+        - containerPort: 3001
+        env:
+        - name: KAFKA_BROKERS
+          value: "insurance-kafka-kafka-bootstrap:9092"
+        - name: CUSTOMER_SERVICE_URL
+          value: "http://customer-service:3006"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: policy-service
+  namespace: insurance-system
+spec:
+  selector:
+    app: policy-service
+  ports:
+  - port: 3001
+    targetPort: 3001
+  type: ClusterIP

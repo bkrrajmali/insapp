@@ -1,0 +1,190 @@
+version: '3.8'
+
+services:
+  # Frontend Service
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    depends_on:
+      - gateway
+
+  # API Gateway (Nginx)
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/gateway.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - policy-service
+      - claim-service
+      - payment-service
+      - fraud-service
+      - notification-service
+      - customer-service
+
+  # Policy Service
+  policy-service:
+    build:
+      context: .
+      dockerfile: docker/policy-service/Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - CUSTOMER_SERVICE_URL=http://customer-service:3006
+    depends_on:
+      - kafka
+      - zookeeper
+      - customer-service
+
+  # Claims Service
+  claim-service:
+    build:
+      context: .
+      dockerfile: docker/claim-service/Dockerfile
+    ports:
+      - "3002:3002"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - POLICY_SERVICE_URL=http://policy-service:3001
+    depends_on:
+      - kafka
+      - zookeeper
+      - policy-service
+
+  # Payment Service
+  payment-service:
+    build:
+      context: .
+      dockerfile: docker/payment-service/Dockerfile
+    ports:
+      - "3003:3003"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - POLICY_SERVICE_URL=http://policy-service:3001
+    depends_on:
+      - kafka
+      - zookeeper
+
+  # Fraud Detection Service
+  fraud-service:
+    build:
+      context: .
+      dockerfile: docker/fraud-service/Dockerfile
+    ports:
+      - "3004:3004"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      - kafka
+      - zookeeper
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: docker/notification-service/Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      - kafka
+      - zookeeper
+
+  # Customer Service
+  customer-service:
+    build:
+      context: .
+      dockerfile: docker/customer-service/Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+    depends_on:
+      - kafka
+      - zookeeper
+
+  # Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    depends_on:
+      - zookeeper
+
+  # Zookeeper
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./k8s/monitoring/prometheus-config.yaml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.0.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.9.0
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+
+  # Fluentd
+  fluentd:
+    image: fluent/fluentd:v1.16
+    volumes:
+      - ./k8s/monitoring/fluentd-config.yaml:/fluentd/etc/fluent.conf
+    ports:
+      - "24224:24224"
+    depends_on:
+      - elasticsearch
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
