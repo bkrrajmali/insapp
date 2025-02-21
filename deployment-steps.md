@@ -129,3 +129,11 @@ kubectl label namespace insurance-system istio-injection=enabled
 - Monitor rate limits and adjust based on traffic patterns
 - Regularly update OWASP rules
 - Review ModSecurity logs for false positives
+
+
+# HOW to access
+Frontend: http://localhost:80
+API Gateway: http://localhost:8080
+Grafana: http://localhost:3000
+Kibana: http://localhost:5601
+Prometheus: http://localhost:9090
